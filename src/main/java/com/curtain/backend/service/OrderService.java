@@ -37,8 +37,9 @@ public class OrderService {
         // Set initial station (lowest step)
         List<Station> stations = stationRepository.findAllByOrderByStepAsc();
         if (!stations.isEmpty()) {
-            order.setCurrentStation(stations.get(0).getId());
-            order.setStatus(stations.get(0).getStatus()); // Initial status
+            order.setCurrentStationId(stations.get(0).getId());
+            order.setCurrentStation(stations.get(0).getStateCode()); // Initial status code
+            order.setOrderState("IN_PROGRESS");
         }
         return orderRepository.save(order);
     }
@@ -79,11 +80,15 @@ public class OrderService {
              }
              
              if (nextStation != null) {
-                 order.setCurrentStation(nextStation.getId());
-                 order.setStatus(nextStation.getStatus());
+                 order.setCurrentStationId(nextStation.getId());
+                 order.setCurrentStation(nextStation.getStateCode());
              } else {
-                 order.setStatus("COMPLETED"); // End of line
-                 order.setCurrentStation(null);
+                 order.setOrderState("COMPLETED"); // End of line
+                 order.setCurrentStationId(null);
+                 // We keep the last currentStation code or set to "COMPLETED"? 
+                 // Request implies state_code link. If completed, maybe no station?
+                 // Let's keep the last one or set explicit string.
+                 order.setCurrentStation("COMPLETED"); 
              }
              orderRepository.save(order);
              return true;

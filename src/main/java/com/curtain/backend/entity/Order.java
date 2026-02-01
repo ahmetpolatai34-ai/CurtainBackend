@@ -40,8 +40,12 @@ public class Order {
 
     private LocalDate date;
 
-    private String status;
+    @Column(name = "current_station")
+    private String currentStation; // Stores state_code
+
+    @Column(name = "order_state")
+    private String orderState; // IN_PROGRESS, COMPLETED, CANCELLED
 
     @Column(name = "current_station_id")
-    private Long currentStation;
+    private Long currentStationId;
 }
