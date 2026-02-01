@@ -35,8 +35,12 @@ public class UserService {
 
     public User login(String username, String password) {
         Optional<User> user = userRepository.findByUsername(username);
-        if (user.isPresent() && user.get().getPassword().equals(password)) {
-            return user.get();
+        if (user.isPresent()) {
+            System.out.println("User found: " + user.get().getUsername() + ", Role: " + user.get().getRole());
+            System.out.println("Comparing passwords: input[" + password + "] with DB[" + user.get().getPassword() + "]");
+            if (user.get().getPassword().equals(password)) {
+                return user.get();
+            }
         }
         return null;
     }

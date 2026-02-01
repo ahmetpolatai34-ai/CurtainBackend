@@ -19,6 +19,7 @@ public class AuthController {
     public ResponseEntity<?> login(@RequestBody Map<String, String> credentials) {
         String username = credentials.get("username");
         String password = credentials.get("password");
+        System.out.println("Login attempt for user: " + username);
         
         User user = userService.login(username, password);
         if (user != null) {

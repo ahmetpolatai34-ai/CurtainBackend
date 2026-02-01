@@ -17,10 +17,10 @@ public class DataInitializer implements CommandLineRunner {
         if (userRepository.findByUsername("admin").isEmpty()) {
             User admin = new User();
             admin.setUsername("admin");
-            admin.setPassword("password");
+            admin.setPassword("admin123");
             admin.setRole("admin");
             userRepository.save(admin);
-            System.out.println("Default admin user created: admin / password");
+            System.out.println("Default admin user created: admin / admin123");
         }
     }
 }

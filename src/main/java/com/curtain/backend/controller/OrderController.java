@@ -49,4 +49,29 @@ public class OrderController {
             return ResponseEntity.badRequest().body("{\"message\": \"Failed to process station\"}");
         }
     }
+
+    @PostMapping("/search")
+    public List<Order> searchOrders(@RequestBody Map<String, Object> searchCriteria) {
+        return orderService.searchOrders(searchCriteria);
+    }
+
+    @PutMapping("/{id}")
+    public ResponseEntity<Order> updateOrder(@PathVariable Long id, @RequestBody Order order) {
+        Order updatedOrder = orderService.updateOrder(id, order);
+        if (updatedOrder != null) {
+            return ResponseEntity.ok(updatedOrder);
+        } else {
+            return ResponseEntity.notFound().build();
+        }
+    }
+
+    @DeleteMapping("/{id}")
+    public ResponseEntity<Void> deleteOrder(@PathVariable Long id) {
+        boolean deleted = orderService.deleteOrder(id);
+        if (deleted) {
+            return ResponseEntity.ok().build();
+        } else {
+            return ResponseEntity.notFound().build();
+        }
+    }
 }
