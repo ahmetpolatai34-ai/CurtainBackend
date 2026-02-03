@@ -252,10 +252,27 @@ public class OrderService {
             // State filtering
             String state = getSafeString(criteria, "state");
             if (state != null) {
-                if (order.getCurrentStation() == null
-                        || !order.getCurrentStation().toLowerCase().contains(state.toLowerCase())) {
-                    matches = false;
+                boolean stateMatch = false;
+
+                // 1. Check current station (e.g., CUTTING, SEWING)
+                if (order.getCurrentStation() != null &&
+                        order.getCurrentStation().toLowerCase().contains(state.toLowerCase())) {
+                    stateMatch = true;
                 }
+
+                // 2. Check general order state (COMPLETED, BLOCKED, CANCELLED)
+                if (order.getOrderState() != null &&
+                        order.getOrderState().toLowerCase().contains(state.toLowerCase())) {
+                    stateMatch = true;
+                }
+
+                // 3. Explicit check for isBlocked property
+                if ("BLOCKED".equalsIgnoreCase(state) && Boolean.TRUE.equals(order.getIsBlocked())) {
+                    stateMatch = true;
+                }
+
+                if (!stateMatch)
+                    matches = false;
             }
 
             // Exclude Completed
