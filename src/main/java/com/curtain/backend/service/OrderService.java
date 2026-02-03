@@ -355,9 +355,11 @@ public class OrderService {
         if (!stationLoad.isEmpty()) {
             java.util.Map.Entry<String, Long> maxEntry = java.util.Collections.max(stationLoad.entrySet(),
                     java.util.Map.Entry.comparingByValue());
-            metrics.put("bottleneckStation", maxEntry.getKey() + " (" + maxEntry.getValue() + " orders)");
+            metrics.put("bottleneckStation", maxEntry.getKey());
+            metrics.put("bottleneckCount", maxEntry.getValue());
         } else {
-            metrics.put("bottleneckStation", "None");
+            metrics.put("bottleneckStation", null);
+            metrics.put("bottleneckCount", 0);
         }
 
         // 3. Fastest Order
