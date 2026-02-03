@@ -18,7 +18,7 @@ public class OrderService {
 
     @Autowired
     private OrderRepository orderRepository;
-    
+
     @Autowired
     private StationRepository stationRepository;
 
@@ -41,60 +41,101 @@ public class OrderService {
             order.setCurrentStation(stations.get(0).getStateCode()); // Initial status code
             order.setOrderState("IN_PROGRESS");
         }
-        return orderRepository.save(order);
+        Order savedOrder = orderRepository.save(order);
+
+        // Limit log creation to valid ID
+        WorkLog log = new WorkLog();
+        log.setOrderId(savedOrder.getId());
+        log.setStationId(savedOrder.getCurrentStationId());
+        log.setWorkerUsername("SYSTEM"); // or get from security context if available
+        log.setAction("ORDER_CREATED");
+        workLogRepository.save(log);
+
+        return savedOrder;
     }
-    
+
     @Transactional
     public boolean processOrderStation(String orderNumber, Long stationId, String workerUsername) {
-         Optional<Order> orderOpt = orderRepository.findByOrderNumber(orderNumber);
-         if (orderOpt.isEmpty()) return false;
-         
-         Order order = orderOpt.get();
-         
-         // Verify we are at the correct station (optional strict check)
-         // For now, we assume if the worker scans it, they are doing the work.
-         
-         // Log the work
-         WorkLog log = new WorkLog();
-         log.setOrderId(order.getId());
-         log.setStationId(stationId);
-         log.setWorkerUsername(workerUsername);
-         workLogRepository.save(log);
-         
-         // Move to next station
-         List<Station> stations = stationRepository.findAllByOrderByStepAsc();
-         Station currentStation = stationRepository.findById(stationId).orElse(null);
-         
-         if (currentStation != null) {
-             boolean foundCurrent = false;
-             Station nextStation = null;
-             
-             for (Station s : stations) {
-                 if (foundCurrent) {
-                     nextStation = s;
-                     break;
-                 }
-                 if (s.getId().equals(stationId)) {
-                     foundCurrent = true;
-                 }
-             }
-             
-             if (nextStation != null) {
-                 order.setCurrentStationId(nextStation.getId());
-                 order.setCurrentStation(nextStation.getStateCode());
-             } else {
-                 order.setOrderState("COMPLETED"); // End of line
-                 order.setCurrentStationId(null);
-                 // We keep the last currentStation code or set to "COMPLETED"? 
-                 // Request implies state_code link. If completed, maybe no station?
-                 // Let's keep the last one or set explicit string.
-                 order.setCurrentStation("COMPLETED"); 
-             }
-             orderRepository.save(order);
-             return true;
-         }
-         
-         return false;
+        Optional<Order> orderOpt = orderRepository.findByOrderNumber(orderNumber);
+        if (orderOpt.isEmpty())
+            return false;
+
+        Order order = orderOpt.get();
+
+        // Verify we are at the correct station (optional strict check)
+        // For now, we assume if the worker scans it, they are doing the work.
+
+        // Log the work
+        WorkLog log = new WorkLog();
+        log.setOrderId(order.getId());
+        log.setStationId(stationId);
+        log.setWorkerUsername(workerUsername);
+        workLogRepository.save(log);
+
+        // Move to next station
+        List<Station> stations = stationRepository.findAllByOrderByStepAsc();
+        Station currentStation = stationRepository.findById(stationId).orElse(null);
+
+        if (currentStation != null) {
+            boolean foundCurrent = false;
+            Station nextStation = null;
+
+            for (Station s : stations) {
+                if (foundCurrent) {
+                    nextStation = s;
+                    break;
+                }
+                if (s.getId().equals(stationId)) {
+                    foundCurrent = true;
+                }
+            }
+
+            if (nextStation != null) {
+                order.setCurrentStationId(nextStation.getId());
+                order.setCurrentStation(nextStation.getStateCode());
+            } else {
+                order.setOrderState("COMPLETED"); // End of line
+                order.setCurrentStationId(null);
+                // We keep the last currentStation code or set to "COMPLETED"?
+                // Request implies state_code link. If completed, maybe no station?
+                // Let's keep the last one or set explicit string.
+                order.setCurrentStation("COMPLETED");
+            }
+            orderRepository.save(order);
+            return true;
+        }
+
+        return false;
+    }
+
+    @Transactional
+    public boolean reportIssue(String orderNumber, String reason, String workerUsername) {
+        Optional<Order> orderOpt = orderRepository.findByOrderNumber(orderNumber);
+        if (orderOpt.isEmpty())
+            return false;
+
+        Order order = orderOpt.get();
+        order.setIsBlocked(true);
+        order.setBlockReason(reason);
+        // We might want to change state to BLOCKED as well, or keep IN_PROGRESS but
+        // paused
+        order.setOrderState("BLOCKED");
+
+        // Log the issue
+        WorkLog log = new WorkLog();
+        log.setOrderId(order.getId());
+        log.setStationId(order.getCurrentStationId());
+        log.setWorkerUsername(workerUsername);
+        log.setAction("ISSUE_REPORTED: " + reason); // Assuming we add 'action' field or reuse existing
+        // Since WorkLog currently doesn't have 'action', we might need to modify
+        // WorkLog or just save it.
+        // Let's modify WorkLog entity first to support 'action' or 'notes'.
+        // For now, I'll assume WorkLog only has basic fields and skip saving custom
+        // notes there
+        // unless I update WorkLog. Let's update WorkLog first.
+
+        orderRepository.save(order);
+        return true;
     }
 
     public Order updateOrder(Long id, Order orderDetails) {
@@ -135,72 +176,88 @@ public class OrderService {
 
     public List<Order> searchOrders(java.util.Map<String, Object> criteria) {
         List<Order> allOrders = orderRepository.findAll();
-        
+
         return allOrders.stream().filter(order -> {
             boolean matches = true;
 
             // Date filtering
             String dateFrom = getSafeString(criteria, "dateFrom");
             if (dateFrom != null) {
-                if (order.getDate() != null && order.getDate().toString().compareTo(dateFrom) < 0) matches = false;
+                if (order.getDate() != null && order.getDate().toString().compareTo(dateFrom) < 0)
+                    matches = false;
             }
-            
+
             String dateTo = getSafeString(criteria, "dateTo");
             if (dateTo != null) {
-                if (order.getDate() != null && order.getDate().toString().compareTo(dateTo) > 0) matches = false;
+                if (order.getDate() != null && order.getDate().toString().compareTo(dateTo) > 0)
+                    matches = false;
             }
 
             // Amount filtering
             String amountMinStr = getSafeString(criteria, "amountMin");
             if (amountMinStr != null) {
-                 try {
+                try {
                     double min = Double.parseDouble(amountMinStr);
-                    if (order.getAmount() == null || order.getAmount() < min) matches = false;
-                 } catch (NumberFormatException e) { }
+                    if (order.getAmount() == null || order.getAmount() < min)
+                        matches = false;
+                } catch (NumberFormatException e) {
+                }
             }
-            
+
             String amountMaxStr = getSafeString(criteria, "amountMax");
             if (amountMaxStr != null) {
-                 try {
-                     double max = Double.parseDouble(amountMaxStr);
-                     if (order.getAmount() == null || order.getAmount() > max) matches = false;
-                 } catch (NumberFormatException e) { }
+                try {
+                    double max = Double.parseDouble(amountMaxStr);
+                    if (order.getAmount() == null || order.getAmount() > max)
+                        matches = false;
+                } catch (NumberFormatException e) {
+                }
             }
 
             // String partial matches (Case-insensitive)
             String orderNumber = getSafeString(criteria, "orderNumber");
             if (orderNumber != null) {
-                if (order.getOrderNumber() == null || !order.getOrderNumber().toLowerCase().contains(orderNumber.toLowerCase())) matches = false;
+                if (order.getOrderNumber() == null
+                        || !order.getOrderNumber().toLowerCase().contains(orderNumber.toLowerCase()))
+                    matches = false;
             }
-            
+
             String orderingStore = getSafeString(criteria, "orderingStore");
             if (orderingStore != null) {
-                if (order.getOrderingStore() == null || !order.getOrderingStore().toLowerCase().contains(orderingStore.toLowerCase())) matches = false;
+                if (order.getOrderingStore() == null
+                        || !order.getOrderingStore().toLowerCase().contains(orderingStore.toLowerCase()))
+                    matches = false;
             }
-            
+
             String customerName = getSafeString(criteria, "customerName");
             if (customerName != null) {
-                if (order.getCustomerName() == null || !order.getCustomerName().toLowerCase().contains(customerName.toLowerCase())) matches = false;
+                if (order.getCustomerName() == null
+                        || !order.getCustomerName().toLowerCase().contains(customerName.toLowerCase()))
+                    matches = false;
             }
-            
+
             String customerTel = getSafeString(criteria, "customerTel");
             if (customerTel != null) {
-                if (order.getCustomerTel() == null || !order.getCustomerTel().contains(customerTel)) matches = false;
+                if (order.getCustomerTel() == null || !order.getCustomerTel().contains(customerTel))
+                    matches = false;
             }
-            
+
             String customerEmail = getSafeString(criteria, "customerEmail");
             if (customerEmail != null) {
-                if (order.getCustomerEmail() == null || !order.getCustomerEmail().toLowerCase().contains(customerEmail.toLowerCase())) matches = false;
+                if (order.getCustomerEmail() == null
+                        || !order.getCustomerEmail().toLowerCase().contains(customerEmail.toLowerCase()))
+                    matches = false;
             }
 
             // State filtering
             String state = getSafeString(criteria, "state");
             if (state != null) {
-                 if (order.getCurrentStation() == null || !order.getCurrentStation().toLowerCase().contains(state.toLowerCase())) {
-                     matches = false;
-                 }
+                if (order.getCurrentStation() == null
+                        || !order.getCurrentStation().toLowerCase().contains(state.toLowerCase())) {
+                    matches = false;
+                }
             }
-            
+
             // Exclude Completed
             if (criteria.containsKey("excludeCompleted") && criteria.get("excludeCompleted") != null) {
                 if (Boolean.parseBoolean(criteria.get("excludeCompleted").toString())) {
@@ -212,5 +269,101 @@ public class OrderService {
 
             return matches;
         }).collect(java.util.stream.Collectors.toList());
+    }
+
+    public List<WorkLog> getOrderLogs(String orderNumber) {
+        Optional<Order> orderOpt = orderRepository.findByOrderNumber(orderNumber);
+        if (orderOpt.isPresent()) {
+            return workLogRepository.findByOrderId(orderOpt.get().getId());
+        }
+        return java.util.Collections.emptyList();
+    }
+
+    public java.util.Map<String, Object> getStatistics() {
+        java.util.Map<String, Object> stats = new java.util.HashMap<>();
+        List<Order> allOrders = orderRepository.findAll();
+
+        long totalOrders = allOrders.size();
+        long completed = allOrders.stream().filter(o -> "COMPLETED".equalsIgnoreCase(o.getOrderState())).count();
+        long inProgress = allOrders.stream().filter(o -> "IN_PROGRESS".equalsIgnoreCase(o.getOrderState())).count();
+        long cancelled = allOrders.stream().filter(o -> "CANCELLED".equalsIgnoreCase(o.getOrderState())).count();
+        long blocked = allOrders.stream()
+                .filter(o -> Boolean.TRUE.equals(o.getIsBlocked()) || "BLOCKED".equalsIgnoreCase(o.getOrderState()))
+                .count();
+
+        stats.put("totalOrders", totalOrders);
+        stats.put("completed", completed);
+        stats.put("inProgress", inProgress);
+        stats.put("cancelled", cancelled);
+        stats.put("blocked", blocked);
+
+        // Potential extension: Breakdown by station?
+        // Map<String, Long> stationCounts = allOrders.stream()
+        // .filter(o -> o.getCurrentStation() != null &&
+        // "IN_PROGRESS".equals(o.getOrderState()))
+        // .collect(Collectors.groupingBy(Order::getCurrentStation,
+        // Collectors.counting()));
+        // stats.put("stationCounts", stationCounts);
+
+        return stats;
+    }
+
+    public java.util.Map<String, Object> getPerformanceMetrics() {
+        java.util.Map<String, Object> metrics = new java.util.HashMap<>();
+        List<Order> completedOrders = orderRepository.findAll().stream()
+                .filter(o -> "COMPLETED".equalsIgnoreCase(o.getOrderState()))
+                .collect(java.util.stream.Collectors.toList());
+
+        // 1. Average Completion Time
+        if (!completedOrders.isEmpty()) {
+            double totalHours = 0;
+            int count = 0;
+            for (Order order : completedOrders) {
+                List<WorkLog> logs = workLogRepository.findByOrderId(order.getId());
+                // Find creation time (first log) and completion time (last log)
+                // This is an estimation. Ideally order has createdDate.
+                // We use first log as proxy for start if logs exist.
+                if (logs.size() >= 2) {
+                    java.time.LocalDateTime start = logs.get(0).getTimestamp();
+                    java.time.LocalDateTime end = logs.get(logs.size() - 1).getTimestamp();
+                    long minutes = java.time.Duration.between(start, end).toMinutes();
+                    totalHours += (minutes / 60.0);
+                    count++;
+                }
+            }
+            if (count > 0) {
+                metrics.put("avgCompletionTime", String.format("%.2f", totalHours / count));
+            } else {
+                metrics.put("avgCompletionTime", "0.0");
+            }
+        } else {
+            metrics.put("avgCompletionTime", "0.0");
+        }
+
+        // 2. Bottleneck Station (Station with most logs/time spent?)
+        // Simplification: Station where orders sit the longest?
+        // Or simply station with most current orders?
+        List<Order> activeOrders = orderRepository.findAll().stream()
+                .filter(o -> "IN_PROGRESS".equalsIgnoreCase(o.getOrderState()))
+                .collect(java.util.stream.Collectors.toList());
+
+        java.util.Map<String, Long> stationLoad = activeOrders.stream()
+                .filter(o -> o.getCurrentStation() != null)
+                .collect(java.util.stream.Collectors.groupingBy(Order::getCurrentStation,
+                        java.util.stream.Collectors.counting()));
+
+        if (!stationLoad.isEmpty()) {
+            java.util.Map.Entry<String, Long> maxEntry = java.util.Collections.max(stationLoad.entrySet(),
+                    java.util.Map.Entry.comparingByValue());
+            metrics.put("bottleneckStation", maxEntry.getKey() + " (" + maxEntry.getValue() + " orders)");
+        } else {
+            metrics.put("bottleneckStation", "None");
+        }
+
+        // 3. Fastest Order
+        // Mocking logic or implementing basic search
+        metrics.put("fastestOrder", "N/A (Needs more data)");
+
+        return metrics;
     }
 }

@@ -20,7 +20,22 @@ public class OrderController {
     public List<Order> getAllOrders() {
         return orderService.getAllOrders();
     }
-    
+
+    @GetMapping("/reports/performance")
+    public java.util.Map<String, Object> getPerformanceMetrics() {
+        return orderService.getPerformanceMetrics();
+    }
+
+    @GetMapping("/stats")
+    public java.util.Map<String, Object> getStatistics() {
+        return orderService.getStatistics();
+    }
+
+    @GetMapping("/{orderNumber}/logs")
+    public List<com.curtain.backend.entity.WorkLog> getOrderLogs(@PathVariable String orderNumber) {
+        return orderService.getOrderLogs(orderNumber);
+    }
+
     @GetMapping("/barcode/{barcode}")
     public ResponseEntity<Order> getOrderByBarcode(@PathVariable String barcode) {
         Order order = orderService.getOrderByNumber(barcode);
@@ -41,7 +56,7 @@ public class OrderController {
         String barcode = (String) payload.get("barcode");
         Long stationId = ((Number) payload.get("stationId")).longValue();
         String worker = (String) payload.get("worker");
-        
+
         boolean success = orderService.processOrderStation(barcode, stationId, worker);
         if (success) {
             return ResponseEntity.ok().body("{\"message\": \"Station completed\"}");
@@ -63,6 +78,19 @@ public class OrderController {
         } else {
             return ResponseEntity.notFound().build();
         }
+    }
+
+    @PostMapping("/{orderNumber}/issue")
+    public ResponseEntity<Void> reportIssue(@PathVariable String orderNumber,
+            @RequestBody java.util.Map<String, String> payload) {
+        String reason = payload.get("reason");
+        String worker = payload.get("worker");
+
+        boolean success = orderService.reportIssue(orderNumber, reason, worker);
+        if (success) {
+            return ResponseEntity.ok().build();
+        }
+        return ResponseEntity.notFound().build();
     }
 
     @DeleteMapping("/{id}")

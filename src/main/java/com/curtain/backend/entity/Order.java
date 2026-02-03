@@ -48,4 +48,10 @@ public class Order {
 
     @Column(name = "current_station_id")
     private Long currentStationId;
+
+    @Column(name = "is_blocked")
+    private Boolean isBlocked = Boolean.FALSE;
+
+    @Column(name = "block_reason")
+    private String blockReason;
 }

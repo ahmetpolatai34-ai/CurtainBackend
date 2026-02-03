@@ -21,6 +21,9 @@ public class WorkLog {
     @Column(name = "worker_username")
     private String workerUsername;
 
+    @Column(name = "action")
+    private String action;
+
     @Column(nullable = false)
     private LocalDateTime timestamp;
 
