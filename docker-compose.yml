@@ -29,5 +29,13 @@ services:
       SPRING_JPA_HIBERNATE_DDL_AUTO: update
       SPRING_JPA_SHOW_SQL: "true"
 
+  frontend-app:
+    build: ../CurtainProject
+    container_name: curtain-frontend
+    ports:
+      - "3000:80"
+    depends_on:
+      - backend-app
+
 volumes:
   mysql_data:
