@@ -3,7 +3,6 @@ version: '3.8'
 services:
   mysql-db:
     image: mysql:8.0
-    container_name: curtain-mysql
     restart: always
     environment:
       MYSQL_DATABASE: curtain_db
@@ -17,7 +16,6 @@ services:
 
   backend-app:
     build: .
-    container_name: curtain-backend
     ports:
       - "9090:8080"
     depends_on:
@@ -31,7 +29,6 @@ services:
 
   frontend-app:
     build: ../CurtainProject
-    container_name: curtain-frontend
     ports:
       - "3000:80"
     depends_on:
