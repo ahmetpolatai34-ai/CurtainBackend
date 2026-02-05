@@ -7,7 +7,7 @@
 BACKUP_DIR="/opt/curtain/backups"
 DATE=$(date +%Y%m%d_%H%M%S)
 BACKUP_FILE="curtain_backup_$DATE.sql"
-CONTAINER_NAME="mysql-db-1"
+CONTAINER_NAME="curtain-mysql-db-1"
 DB_NAME="curtain_db"
 DB_USER="root"
 DB_PASSWORD="root_password"
