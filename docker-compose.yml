@@ -13,13 +13,21 @@ services:
       - "3306:3306"
     volumes:
       - mysql_data:/var/lib/mysql
+    healthcheck:
+      test: [ "CMD", "mysqladmin", "ping", "-h", "localhost", "-u", "root", "-p${MYSQL_ROOT_PASSWORD}" ]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+      start_period: 30s
 
   backend-app:
-    build: .
+    build: ./CurtainBackend
     ports:
       - "9090:8080"
+    restart: on-failure
     depends_on:
-      - mysql-db
+      mysql-db:
+        condition: service_healthy
     environment:
       SPRING_DATASOURCE_URL: jdbc:mysql://mysql-db:3306/${MYSQL_DATABASE}?useSSL=false&allowPublicKeyRetrieval=true
       SPRING_DATASOURCE_USERNAME: ${MYSQL_USER}
@@ -28,7 +36,7 @@ services:
       SPRING_JPA_SHOW_SQL: "true"
 
   frontend-app:
-    build: ../CurtainProject
+    build: ./CurtainFrontend
     ports:
       - "3000:80"
     depends_on:
