@@ -291,7 +291,7 @@ public class OrderService {
     public List<WorkLog> getOrderLogs(String orderNumber) {
         Optional<Order> orderOpt = orderRepository.findByOrderNumber(orderNumber);
         if (orderOpt.isPresent()) {
-            return workLogRepository.findByOrderId(orderOpt.get().getId());
+            return workLogRepository.findByOrderIdOrderByTimestampAsc(orderOpt.get().getId());
         }
         return java.util.Collections.emptyList();
     }
@@ -314,13 +314,12 @@ public class OrderService {
         stats.put("cancelled", cancelled);
         stats.put("blocked", blocked);
 
-        // Potential extension: Breakdown by station?
-        // Map<String, Long> stationCounts = allOrders.stream()
-        // .filter(o -> o.getCurrentStation() != null &&
-        // "IN_PROGRESS".equals(o.getOrderState()))
-        // .collect(Collectors.groupingBy(Order::getCurrentStation,
-        // Collectors.counting()));
-        // stats.put("stationCounts", stationCounts);
+        // Extension: Breakdown by station
+        java.util.Map<String, Long> stationCounts = allOrders.stream()
+                .filter(o -> o.getCurrentStation() != null && "IN_PROGRESS".equalsIgnoreCase(o.getOrderState()))
+                .collect(java.util.stream.Collectors.groupingBy(Order::getCurrentStation,
+                        java.util.stream.Collectors.counting()));
+        stats.put("stationCounts", stationCounts);
 
         return stats;
     }
@@ -336,7 +335,7 @@ public class OrderService {
             double totalHours = 0;
             int count = 0;
             for (Order order : completedOrders) {
-                List<WorkLog> logs = workLogRepository.findByOrderId(order.getId());
+                List<WorkLog> logs = workLogRepository.findByOrderIdOrderByTimestampAsc(order.getId());
                 // Find creation time (first log) and completion time (last log)
                 // This is an estimation. Ideally order has createdDate.
                 // We use first log as proxy for start if logs exist.
@@ -380,8 +379,28 @@ public class OrderService {
         }
 
         // 3. Fastest Order
-        // Mocking logic or implementing basic search
-        metrics.put("fastestOrder", "N/A (Needs more data)");
+        String fastestOrderNo = "N/A";
+        long minMinutes = Long.MAX_VALUE;
+
+        for (Order order : completedOrders) {
+            List<WorkLog> logs = workLogRepository.findByOrderIdOrderByTimestampAsc(order.getId());
+            if (logs.size() >= 2) {
+                java.time.LocalDateTime start = logs.get(0).getTimestamp();
+                java.time.LocalDateTime end = logs.get(logs.size() - 1).getTimestamp();
+                long minutes = java.time.Duration.between(start, end).toMinutes();
+
+                if (minutes < minMinutes) {
+                    minMinutes = minutes;
+                    fastestOrderNo = order.getOrderNumber();
+                }
+            }
+        }
+
+        if (minMinutes != Long.MAX_VALUE) {
+            metrics.put("fastestOrder", fastestOrderNo + " (" + minMinutes + " min)");
+        } else {
+            metrics.put("fastestOrder", "N/A");
+        }
 
         return metrics;
     }

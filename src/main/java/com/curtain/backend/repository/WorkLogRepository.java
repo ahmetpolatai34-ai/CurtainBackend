@@ -5,5 +5,5 @@ import org.springframework.data.jpa.repository.JpaRepository;
 import java.util.List;
 
 public interface WorkLogRepository extends JpaRepository<WorkLog, Long> {
-    List<WorkLog> findByOrderId(Long orderId);
+    List<WorkLog> findByOrderIdOrderByTimestampAsc(Long orderId);
 }
