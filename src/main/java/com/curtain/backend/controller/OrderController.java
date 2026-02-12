@@ -17,7 +17,12 @@ public class OrderController {
     private OrderService orderService;
 
     @GetMapping
-    public List<Order> getAllOrders() {
+    public List<Order> getAllOrders(
+            @RequestParam(required = false) String startDate,
+            @RequestParam(required = false) String endDate) {
+        if (startDate != null || endDate != null) {
+            return orderService.getOrdersByDateRange(startDate, endDate);
+        }
         return orderService.getAllOrders();
     }
 
@@ -27,8 +32,10 @@ public class OrderController {
     }
 
     @GetMapping("/stats")
-    public java.util.Map<String, Object> getStatistics() {
-        return orderService.getStatistics();
+    public java.util.Map<String, Object> getStatistics(
+            @RequestParam(required = false) String startDate,
+            @RequestParam(required = false) String endDate) {
+        return orderService.getStatistics(startDate, endDate);
     }
 
     @GetMapping("/{orderNumber}/logs")

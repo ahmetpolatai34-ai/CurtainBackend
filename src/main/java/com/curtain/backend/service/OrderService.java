@@ -10,6 +10,7 @@ import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
+import java.time.LocalDate;
 import java.util.List;
 import java.util.Optional;
 
@@ -29,6 +30,20 @@ public class OrderService {
         return orderRepository.findAll();
     }
 
+    public List<Order> getOrdersByDateRange(String startDateStr, String endDateStr) {
+        LocalDate start = (startDateStr != null && !startDateStr.isEmpty()) ? LocalDate.parse(startDateStr) : null;
+        LocalDate end = (endDateStr != null && !endDateStr.isEmpty()) ? LocalDate.parse(endDateStr) : null;
+
+        if (start != null && end != null) {
+            return orderRepository.findByDateBetween(start, end);
+        } else if (start != null) {
+            return orderRepository.findByDateGreaterThanEqual(start);
+        } else if (end != null) {
+            return orderRepository.findByDateLessThanEqual(end);
+        }
+        return orderRepository.findAll();
+    }
+
     public Order getOrderByNumber(String orderNumber) {
         return orderRepository.findByOrderNumber(orderNumber).orElse(null);
     }
@@ -40,16 +55,22 @@ public class OrderService {
             order.setCurrentStationId(stations.get(0).getId());
             order.setCurrentStation(stations.get(0).getStateCode()); // Initial status code
             order.setOrderState("IN_PROGRESS");
+        } else {
+            order.setOrderState("PENDING");
         }
+
         Order savedOrder = orderRepository.save(order);
 
-        // Limit log creation to valid ID
-        WorkLog log = new WorkLog();
-        log.setOrderId(savedOrder.getId());
-        log.setStationId(savedOrder.getCurrentStationId());
-        log.setWorkerUsername("SYSTEM"); // or get from security context if available
-        log.setAction("ORDER_CREATED");
-        workLogRepository.save(log);
+        // Only create log if station exists to avoid null constraint violation in
+        // WorkLog
+        if (savedOrder.getCurrentStationId() != null) {
+            WorkLog log = new WorkLog();
+            log.setOrderId(savedOrder.getId());
+            log.setStationId(savedOrder.getCurrentStationId());
+            log.setWorkerUsername("SYSTEM");
+            log.setAction("ORDER_CREATED");
+            workLogRepository.save(log);
+        }
 
         return savedOrder;
     }
@@ -296,15 +317,16 @@ public class OrderService {
         return java.util.Collections.emptyList();
     }
 
-    public java.util.Map<String, Object> getStatistics() {
+    public java.util.Map<String, Object> getStatistics(String startDate, String endDate) {
         java.util.Map<String, Object> stats = new java.util.HashMap<>();
-        List<Order> allOrders = orderRepository.findAll();
+        List<Order> filteredOrders = getOrdersByDateRange(startDate, endDate);
 
-        long totalOrders = allOrders.size();
-        long completed = allOrders.stream().filter(o -> "COMPLETED".equalsIgnoreCase(o.getOrderState())).count();
-        long inProgress = allOrders.stream().filter(o -> "IN_PROGRESS".equalsIgnoreCase(o.getOrderState())).count();
-        long cancelled = allOrders.stream().filter(o -> "CANCELLED".equalsIgnoreCase(o.getOrderState())).count();
-        long blocked = allOrders.stream()
+        long totalOrders = filteredOrders.size();
+        long completed = filteredOrders.stream().filter(o -> "COMPLETED".equalsIgnoreCase(o.getOrderState())).count();
+        long inProgress = filteredOrders.stream().filter(o -> "IN_PROGRESS".equalsIgnoreCase(o.getOrderState()))
+                .count();
+        long cancelled = filteredOrders.stream().filter(o -> "CANCELLED".equalsIgnoreCase(o.getOrderState())).count();
+        long blocked = filteredOrders.stream()
                 .filter(o -> Boolean.TRUE.equals(o.getIsBlocked()) || "BLOCKED".equalsIgnoreCase(o.getOrderState()))
                 .count();
 
@@ -315,7 +337,7 @@ public class OrderService {
         stats.put("blocked", blocked);
 
         // Extension: Breakdown by station
-        java.util.Map<String, Long> stationCounts = allOrders.stream()
+        java.util.Map<String, Long> stationCounts = filteredOrders.stream()
                 .filter(o -> o.getCurrentStation() != null && "IN_PROGRESS".equalsIgnoreCase(o.getOrderState()))
                 .collect(java.util.stream.Collectors.groupingBy(Order::getCurrentStation,
                         java.util.stream.Collectors.counting()));
