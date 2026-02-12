@@ -83,8 +83,10 @@ public class OrderService {
 
         Order order = orderOpt.get();
 
-        // Verify we are at the correct station (optional strict check)
-        // For now, we assume if the worker scans it, they are doing the work.
+        // Verify the order is at the correct station
+        if (order.getCurrentStationId() == null || !order.getCurrentStationId().equals(stationId)) {
+            return false; // Order is not at this station
+        }
 
         // Log the work
         WorkLog log = new WorkLog();
